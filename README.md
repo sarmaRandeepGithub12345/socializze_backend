@@ -1,2 +1,3 @@
 # socializze_backend
-Git repository for social media app backend
+
+Git repository for socializze backend
