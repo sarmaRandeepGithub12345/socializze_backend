@@ -213,72 +213,38 @@ class PostController extends Controller
         //api/post/get-posts?page=1
         //api/post/get-posts?page=2
 
+        try {
+            //code...
 
-        $authUser = Auth::user();
 
-        $userId = $authUser->id;
-        //Get following users' IDs
-        $followingIds = $authUser->following()->pluck('following_id')->toArray();
-        $postuserIds = array_merge([$userId], $followingIds);
-        $followingCommentedIds = Post::whereNotIn('user_id', $followingIds)
-            ->with(['comments'])
-            ->whereHas(
-                'comments',
-                function ($query) use ($followingIds) {
-                    return $query->whereIn('user_id', $followingIds)->whereNull('replied_to_id');
-                }
-            )
-            ->pluck('user_id')
-            ->toArray();
-        $finalIds = array_merge($postuserIds, $followingCommentedIds);
+            $authUser = Auth::user();
 
-        $posts = Post::whereIn('user_id', $finalIds)
-            ->with(['user', 'likes', 'views', 'singleFile'])
-            ->withCount(['likes', 'comments'])
-            ->orderBy('created_at', 'desc')
-            ->orderBy('id', 'desc')
-            ->paginate(10)
-            ->through(function ($post) use ($authUser) {
-                $isFollowed = FollowerFollowing::where('follower_id', $authUser->id)
-                    ->where('following_id', $post->user->id)
-                    ->exists();
+            $userId = $authUser->id;
+            //Get following users' IDs
+            $followingIds = $authUser->following()->pluck('following_id')->toArray();
+            $postuserIds = array_merge([$userId], $followingIds);
+            $followingCommentedIds = Post::whereNotIn('user_id', $followingIds)
+                ->with(['comments'])
+                ->whereHas(
+                    'comments',
+                    function ($query) use ($followingIds) {
+                        return $query->whereIn('user_id', $followingIds)->whereNull('replied_to_id');
+                    }
+                )
+                ->pluck('user_id')
+                ->toArray();
+            $finalIds = array_merge($postuserIds, $followingCommentedIds);
 
-                $hasLiked = $post->likes->contains('user_id', Auth::user()->id);
-                $files = $post->singleFile->map(function ($file) {
-                    return [
-                        'aws_link' =>  $this->helperService->fullUrlTransform($file->aws_link),
-                        'thumbnail' =>  $this->helperService->fullUrlTransform($file->thumbnail),
-                    ];
-                });
-                return [
-                    'id' => $post->id,
-                    'description' => $post->description,
-                    'isVideo' => $post->isVideo,
-                    'postLinks' => $files,
-                    'user' => [
-                        'user_id' => $post->user->id,
-                        'username' => $post->user->username,
-                        'imageUrl' => $post->user->imageUrl,
-                        'isFollowed' => $isFollowed,
-                    ],
-                    'likes_count' => $post->likes_count,
-                    'comments_count' => $post->comments_count,
-                    'has_liked' => $hasLiked,
-                    'views_count' => $post->views->sum('view_count'),
-                    'created_at' => $post->created_at,
-                    'updated_at' => $post->updated_at,
-                ];
-            });
-        if (count($posts) == 0) {
-            $posts = Post::with(['user', 'likes', 'views', 'singleFile',])
+            $posts = Post::whereIn('user_id', $finalIds)
+                ->with(['user', 'likes', 'views', 'singleFile'])
                 ->withCount(['likes', 'comments'])
-                // ->inRandomOrder()
                 ->orderBy('created_at', 'desc')
-                ->paginate(3)
+                ->orderBy('id', 'desc')
+                ->paginate(10)
                 ->through(function ($post) use ($authUser) {
-                    // $isFollowed = FollowerFollowing::where('follower_id', $authUser->id)
-                    //     ->where('following_id', $post->user->id)
-                    //     ->exists();
+                    $isFollowed = FollowerFollowing::where('follower_id', $authUser->id)
+                        ->where('following_id', $post->user->id)
+                        ->exists();
 
                     $hasLiked = $post->likes->contains('user_id', Auth::user()->id);
                     $files = $post->singleFile->map(function ($file) {
@@ -296,7 +262,7 @@ class PostController extends Controller
                             'user_id' => $post->user->id,
                             'username' => $post->user->username,
                             'imageUrl' => $post->user->imageUrl,
-                            'isFollowed' => false,
+                            'isFollowed' => $isFollowed,
                         ],
                         'likes_count' => $post->likes_count,
                         'comments_count' => $post->comments_count,
@@ -306,9 +272,49 @@ class PostController extends Controller
                         'updated_at' => $post->updated_at,
                     ];
                 });
-        }
+            if (count($posts) == 0) {
+                $posts = Post::with(['user', 'likes', 'views', 'singleFile',])
+                    ->withCount(['likes', 'comments'])
+                    // ->inRandomOrder()
+                    ->orderBy('created_at', 'desc')
+                    ->paginate(3)
+                    ->through(function ($post) use ($authUser) {
+                        // $isFollowed = FollowerFollowing::where('follower_id', $authUser->id)
+                        //     ->where('following_id', $post->user->id)
+                        //     ->exists();
 
-        return HelperResponse('success', 'Post', 200, $posts);
+                        $hasLiked = $post->likes->contains('user_id', Auth::user()->id);
+                        $files = $post->singleFile->map(function ($file) {
+                            return [
+                                'aws_link' =>  $this->helperService->fullUrlTransform($file->aws_link),
+                                'thumbnail' =>  $this->helperService->fullUrlTransform($file->thumbnail),
+                            ];
+                        });
+                        return [
+                            'id' => $post->id,
+                            'description' => $post->description,
+                            'isVideo' => $post->isVideo,
+                            'postLinks' => $files,
+                            'user' => [
+                                'user_id' => $post->user->id,
+                                'username' => $post->user->username,
+                                'imageUrl' => $post->user->imageUrl,
+                                'isFollowed' => false,
+                            ],
+                            'likes_count' => $post->likes_count,
+                            'comments_count' => $post->comments_count,
+                            'has_liked' => $hasLiked,
+                            'views_count' => $post->views->sum('view_count'),
+                            'created_at' => $post->created_at,
+                            'updated_at' => $post->updated_at,
+                        ];
+                    });
+            }
+
+            return HelperResponse('success', 'Post', 200, $posts);
+        } catch (\Throwable $th) {
+            return HelperResponse('error', $th->getMessage(), 422);
+        }
     }
     public function deletePost(Request $request)
     {
