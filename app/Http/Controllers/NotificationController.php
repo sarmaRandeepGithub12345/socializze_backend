@@ -238,7 +238,7 @@ class NotificationController extends Controller
             return HelperResponse('error', $th->getMessage(), 422, $th);
         }
     }
-    public function somefunction()
+    public function test()
     {
         $notifications = [];
         $user = Auth::user(); // Get the full user object, not just the ID
@@ -422,7 +422,6 @@ class NotificationController extends Controller
                 'device_token' => 'required|String',
                 //  'reply_id'=>'required|uuid|exists:users,id',
             ]);
-
             if ($validation->fails()) {
                 return HelperResponse('error', $validation->errors()->first(), 422, $validation->errors()->messages());
             }
@@ -430,7 +429,6 @@ class NotificationController extends Controller
 
             $user->deviceToken = $request->device_token . ' br ' . $user->id;
             $user->save();
-
             $notifications = Notifications::where('user_id', $user->id)->where('seen', false)->get();
             $notifications->each(function ($notif) use ($user) {
                 if ($notif->first_parent_type == 'App\\Models\\Post' && $notif->second_parent_type == 'App\\Models\\Like') {
@@ -602,22 +600,6 @@ class NotificationController extends Controller
             return HelperResponse('success', 'Device token saved', 201);
         } catch (\Throwable $th) {
             return HelperResponse('error', $th->getMessage(), 422, $th);
-        }
-    }
-    public function test()
-    {
-        try {
-            //code...
-
-            $user = Auth::user();
-
-            $parts = $this->helperService->breakDeviceToken($user->deviceToken);
-
-
-            $this->firebaseService->sendNotification($parts[0], 'test notification', 'hello', 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQb-NGEQDekk2BwsllLjk4tcIM_BPIzXECdsg&s');
-            return "done";
-        } catch (\Throwable $th) {
-            return $th->getMessage();
         }
     }
 }
