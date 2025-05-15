@@ -10,18 +10,17 @@ use Kreait\Firebase\ServiceAccount;
 class FirebaseNotificationService
 {
     protected $messaging;
-    
+
     public function __construct()
     {
         //$firebase = (new Factory)->withServiceAccount(storage_path('app/firebase_auth.json'));
         $credentials = config('firebase.credentials');
         $firebase = (new Factory())->withServiceAccount($credentials);
         $this->messaging = $firebase->createMessaging();
-
     }
     public function sendNotification($token, $title, $body, $image)
     {
-        
+
         $message = [
             'token' => $token,
             'notification' => [
@@ -50,10 +49,10 @@ class FirebaseNotificationService
 
         $this->messaging->send($message);
     }
-    
+
     public function likeCommentNotification($token, $title, $body, $image)
     {
-        
+
         $message = [
             'token' => $token,
             'notification' => [
@@ -64,15 +63,15 @@ class FirebaseNotificationService
                 // 'post_image'=>'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQb-NGEQDekk2BwsllLjk4tcIM_BPIzXECdsg&s',
             ],
             'data' => [
-                'type'=>'comment/like',
+                'type' => 'comment/like',
                 'post_image' => $image,
             ],
         ];
 
         $this->messaging->send($message);
     }
-    
-    public function madeCommentNotification($token, $title, $body, $postimage,$profileimage)
+
+    public function madeCommentNotification($token, $title, $body, $postimage, $profileimage)
     {
         $message = [
             'token' => $token,
@@ -81,9 +80,9 @@ class FirebaseNotificationService
                 'body' => $body,
             ],
             'data' => [
-                'type'=>'comment/parent/make',
+                'type' => 'comment/parent/make',
                 'post_image' => $postimage,
-                'profile_image'=>$profileimage,
+                'profile_image' => $profileimage,
             ],
         ];
 

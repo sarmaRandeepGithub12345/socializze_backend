@@ -126,6 +126,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
             Route::post('save-device-token', 'saveDeviceToken');
             Route::post('mark-all-seen', 'markAllSeen');
             Route::post('get-all-notifications', 'getNotifications');
+            Route::post('test', 'test');
         });
     Route::prefix('order')
         ->controller(PaymentController::class)
