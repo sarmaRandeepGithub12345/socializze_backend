@@ -149,12 +149,22 @@ class HelperService
         }
         return $uploadedFiles;
     }
-    public function awsDelete($files)
+    public function awsDelete($UploadedFilesArray)
     {
-        foreach ($files as $file) {
-            $parsed_url = parse_url($file);
-            $path = ltrim($parsed_url['path'], '/');
-            Storage::disk('s3')->delete($path);
+        try {
+            if (!$UploadedFilesArray || $UploadedFilesArray->isEmpty()) {
+                return ["message" => "Nothing to delete", "status" => true];
+            }
+            foreach ($UploadedFilesArray as $obj) {
+                Storage::disk('s3')->delete($obj->aws_link);
+                if (!empty($obj->thumbnail)) {
+                    Storage::disk('s3')->delete($obj->thumbnail);
+                }
+                $obj->delete();
+            }
+            return ["message" => "success", "status" => true,];
+        } catch (\Throwable $th) {
+            return ["message" => $th->getMessage(), "status" => false,];
         }
     }
     public function convertImageToJpg($file, $directory)

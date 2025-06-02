@@ -41,6 +41,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::prefix('auth')
         ->controller(AuthController::class)
         ->group(function () {
+            Route::post('delete-profile', 'deleteProfile');
             Route::post('change-profile-picture', 'changeProfilePicture');
             Route::post('create-username', 'usernameGetToken');
             Route::post('create-password', 'createPassword');
@@ -48,6 +49,9 @@ Route::middleware(['auth:sanctum'])->group(function () {
             Route::post('logout', 'logout');
             Route::post('refresh', 'refresh');
             Route::post('test', 'test');
+            Route::post('soft-delete-user', 'softDeleteUser');
+            //deleteProfile
+            // Route::post('delete-profile', 'deleteProfile');
         });
     Route::prefix('search')
         ->controller(GeneralController::class)

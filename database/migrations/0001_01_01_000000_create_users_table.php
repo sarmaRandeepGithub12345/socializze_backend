@@ -22,7 +22,7 @@ return new class extends Migration
             $table->string('otp')->nullable();
             $table->timestamp('otp_expires_at')->nullable();
             $table->timestamp('email_verified_at')->nullable();
-            $table->bigInteger('issue')->default(0);//
+            $table->bigInteger('issue')->default(0); //
             $table->string('facebook_id')->nullable();
             $table->string('google_id')->nullable();
             $table->string('deviceToken')->nullable();

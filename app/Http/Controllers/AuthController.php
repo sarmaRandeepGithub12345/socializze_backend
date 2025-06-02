@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Comment;
 use App\Models\Notifications;
 use App\Models\User;
 use App\Services\HelperService;
@@ -10,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Laravel\Sanctum\PersonalAccessToken;
@@ -21,9 +23,104 @@ class AuthController extends Controller
     {
         $this->helperService = $helperService;
     }
-    public function test()
+    public function restoreProfile(Request $request)
+    {
+        try {
+            $user = User::withTrashed()->findOrFail($userId);
+            $user->restore(); // Restore user
+
+            // Restore posts
+            $user->posts()->withTrashed()->restore();
+
+            // Restore comments
+            Comment::withTrashed()->where('user_id', $user->id)->restore();
+
+            // Restore likes
+            $user->likes()->withTrashed()->restore();
+
+            return HelperResponse('success', 'Profile restored successfully', 200);
+        } catch (\Throwable $th) {
+            return HelperResponse('error', 'Failed to restore profile: ' . $th->getMessage(), 500);
+        }
+    }
+    public function softDeleteUser(Request $request)
+    {
+        try {
+            $user = Auth::user();
+            $user->tokens()->delete(); // Revoke API tokens if using Sanctum
+
+            // Soft delete the user
+            $user->delete();
+
+            return HelperResponse('success', 'Your account is scheduled to be deleted 30 days later.', 200);
+        } catch (\Throwable $th) {
+            return HelperResponse('error', 'Failed to delete profile: ' . $th->getMessage(), 500);
+        }
+        // Optionally revoke tokens, sessions, etc. if you want to logout the user
+    }
+    public function softDeleteProfile()
     {
 
+        $user = Auth::user();
+
+        try {
+            // Get user posts
+            $posts = $user->posts;
+            foreach ($posts as $post) {
+                // $this->helperService->awsDelete($post->singleFile);
+                // Delete likes on comments and their notifications
+                foreach ($post->comments as $comment) {
+                    foreach ($comment->likes as $like) {
+                        $like->notification()?->delete();
+                        $like->delete();
+                    }
+                    $comment->notification()?->delete();
+                    $comment->delete();
+                }
+                // Delete likes on post and their notifications
+                foreach ($post->likes as $like) {
+                    $like->notification()?->delete();
+                    $like->delete();
+                }
+                // Delete notifications on the post
+                $post->notifications()?->delete();
+                // Delete the post
+                $post->delete();
+            }
+            // OPTIONAL: Delete user-created comments outside their own posts
+            $userComments = Comment::where('user_id', $user->id)->get();
+            foreach ($userComments as $comment) {
+                foreach ($comment->likes as $like) {
+                    $like->notification()?->delete();
+                    $like->delete();
+                }
+                $comment->notification()?->delete();
+                $comment->delete();
+            }
+            // Delete user likes elsewhere (e.g. on others' posts/comments)
+            foreach ($user->likes as $like) {
+                $like->notification()?->delete();
+                $like->delete();
+            }
+            // Delete all notifications owned by this user
+            $user->notifications()?->delete();
+
+            // OPTIONAL: delete chat messages, chats, chat_participants
+            // (depends on your chat model relationships, but generally:)
+            // foreach ($user->messages as $message) { $message->delete(); }
+
+            // Delete user account
+            $user->delete();
+
+
+            return HelperResponse('success', 'Profile deleted successfully', 200);
+        } catch (\Throwable $th) {
+            return HelperResponse('error', 'Failed to delete profile: ' . $th->getMessage(), 500);
+        }
+    }
+    public function deleteUser() {}
+    public function test()
+    {
         try {
             return [Auth::user()];
         } catch (\Throwable $th) {
@@ -33,7 +130,8 @@ class AuthController extends Controller
     public function getUserDetails($email)
     {
         try {
-            $user =  User::where('email', $email)
+            $user =  User::withTrashed()
+                ->where('email', $email)
                 ->with(['bankAccount', 'phoneN'])
                 ->withCount(['following', 'followers', 'posts'])
                 ->first();
@@ -42,32 +140,6 @@ class AuthController extends Controller
             return $th;
         }
     }
-    // public function finalUser($user)
-    // {
-    //     try {
-    //         $country_code = optional($user->phoneN)->country_code;
-    //         $phone = optional($user->phoneN)->phone;
-
-    //         return [
-    //             'id' => $user->id,
-    //             'name' => $user->name,
-    //             'username' => $user->username,
-    //             'email' => $user->email,
-    //             'imageUrl' => $user->imageUrl,
-    //             'description' => $user->description,
-    //             'created_at' => $user->created_at,
-    //             'updated_at' => $user->updated_at,
-    //             'posts_count' => $user->posts_count,
-    //             'following_count' => $user->following_count,
-    //             'followers_count' => $user->followers_count,
-    //             'phone' => $country_code && $phone ? strval($country_code . $phone) : null,
-    //             'bank_account' => $user->bankAccount,
-    //         ];
-    //     } catch (\Throwable $th) {
-    //         return $th;
-    //     }
-    // }
-
     public function createPassword(Request $request)
     {
         $validation = Validator::make($request->all(), [
@@ -126,7 +198,6 @@ class AuthController extends Controller
 
         return HelperResponse('success', 'Name successfully updated', 200);
     }
-
     public function usernameGetToken(Request $request)
     {
         $validation = Validator::make($request->all(), [
@@ -136,7 +207,6 @@ class AuthController extends Controller
                 'string',
                 'email',
                 'max:100',
-                // Rule::unique('users', 'email')->ignore($request->id),
             ],
         ]);
 
@@ -145,7 +215,6 @@ class AuthController extends Controller
         }
 
         $accessToken = $request->bearerToken();
-
         // Get access token from database
         $token = PersonalAccessToken::findToken($accessToken);
 
@@ -162,14 +231,13 @@ class AuthController extends Controller
 
         //if username is empty
         $token = $user->createToken('auth_token')->plainTextToken;
-        //JWTAuth::customClaims(['id' => $user->id, 'email' => $user->email, 'username' => $user->username])->fromUser($user);
 
         if (!$token) {
             return HelperResponse('error', 'Unauthorized attempt', 401);
         }
         $unseenNotificationCount = Notifications::where('user_id', $user->id)->where('seen', 0)->count();
         $res = $this->helperService->messageFromCreator();
-        // $phone_number = ($user->phoneN && !is_null($user->phoneN->verified_at)) ? $user->phoneN->country_code . $user->phoneN->phone : null;
+
         return HelperResponse('success', 'Username successfully made', 200, [
             'user' => $this->helperService->finalUser($user),
             'unseenNotif' => $unseenNotificationCount,
@@ -194,10 +262,14 @@ class AuthController extends Controller
         if (!$user) {
             return HelperResponse('error', 'User does not exist', 422);
         }
-
-        if ($user->username == null) {
-            return HelperResponse('error', 'User not found', 422);
+        if ($user->trashed()) {
+            $user->restore();
         }
+
+
+        // if ($user->username == null) {
+        //     return HelperResponse('error', 'User not found', 422);
+        // }
         if (!Hash::check($request->password, $user->password)) {
             return HelperResponse('error', 'Password mismatch', 422);
         }
@@ -326,13 +398,17 @@ class AuthController extends Controller
         $facebookUser = $response->json();
 
         // Step 4: Check if the user exists in the database
-        $user = User::where('email', $facebookUser['email'])->first();
+        $user = User::withTrashed()->where('email', $facebookUser['email'])->first();
         // $user->makeHidden(['phoneN']);
 
         $check = 0;
 
         // Step 5: If user exists, log them in; otherwise, create a new user
         if ($user) {
+            if ($user->trashed()) {
+                $user->restore();
+            }
+
             if ($user->facebook_id == null) {
                 $user->facebook_id = $facebookUser['id'];
                 $user->save();
@@ -417,11 +493,15 @@ class AuthController extends Controller
             }
 
             $googleUser = $response->json();
-            $user = User::where('email', $googleUser['email'])->first();
+            // return $googleUser;
+            $user = User::withTrashed()->where('email', $googleUser['email'])->first();
             // $user->makeHidden(['phoneN']);
 
             $check = 0;
             if ($user) {
+                if ($user->trashed()) {
+                    $user->restore();
+                }
                 if ($user->google_id == null) {
                     $user->google_id = $googleUser['sub'];
                     $user->save();
@@ -432,19 +512,12 @@ class AuthController extends Controller
                 // make a token
                 $token = $user->createToken('auth_token')->plainTextToken;
 
-
-                // $user = User::where('google_id', $googleUser['sub'])
-                //     ->withCount(['following', 'followers', 'posts'])
-                //     ->first();
-
                 if ($user->username == null || $user->password == null) {
                     $check = 1;
                 }
-                // $user->makeHidden(['phoneN']);
 
                 $unseenNotificationCount = Notifications::where('user_id', $user->id)->where('seen', 0)->count();
 
-                // $phone_number = ($user->phoneN && !is_null($user->phoneN->verified_at)) ? $user->phoneN->country_code . $user->phoneN->phone : null;
                 return HelperResponse('success', 'User logged successfully', 200, [
                     'unseenNotif' => $unseenNotificationCount,
                     'user' => $this->helperService->finalUser($user),
@@ -468,7 +541,6 @@ class AuthController extends Controller
             $newuser = $this->getUserDetails($newuser->email);
 
             $token = $newuser->createToken('auth_token')->plainTextToken;
-
 
             return HelperResponse('success', 'Welcome Aboard', 200, [
                 'unseenNotif' => 0,
@@ -495,7 +567,7 @@ class AuthController extends Controller
         }
 
         // Attempt to find the user by email
-        $user = User::where('email', $request->email)
+        $user = User::withTrashed()->where('email', $request->email)
             ->withCount(['following', 'followers', 'posts'])
             ->first();
 

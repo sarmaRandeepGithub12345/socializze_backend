@@ -118,10 +118,6 @@ class MessageController extends Controller
             if ($validation->fails()) {
                 return HelperResponse('error', $validation->errors()->first(), 422, $validation->errors()->messages());
             }
-
-            $loggeduser = Auth::user();
-            // User::find(Auth::user()->id);
-
             // Paginate chat participants with 'pending' status and eager load 'chats'
             //  $chats = Chats::where('is_group',$request->is_group)->whereHas('chatparticipants', function($query) use ($loggeduser,$request) {
             //         $query->where('user_id', $loggeduser->id)->where('status',$request->status);
@@ -139,7 +135,6 @@ class MessageController extends Controller
     {
         try {
             $loggeduser = Auth::user();
-
             $chatParticipants = $loggeduser
                 ->chatparticipants()
                 ->where('status', $variable)
@@ -176,23 +171,27 @@ class MessageController extends Controller
             //     )
             //     ->paginate(10);
             // Transform the paginated result
-            $chatParticipants->getCollection()->transform(function ($chatParticipant) use ($loggeduser, $variable,) {
+            $chatParticipants->getCollection()->transform(function ($chatParticipant) use ($loggeduser,) {
                 // Get the chat related to this chat participant
                 $chat = $chatParticipant->chats;
-
                 // Get all recipients (other users in the chat)
                 $recipients = ChatParticipants::where('chat_id', $chat->id)
-                    ->where('user_id', '!=', $loggeduser->id) // Exclude the logged-in user
+                    ->where('user_id', '!=', $loggeduser->id)
+                    ->with(['users' => function ($query) {
+                        $query->withTrashed(); // Include soft-deleted users
+                    }])
                     ->with('users') // Load the related user for each participant
                     ->get()
                     ->map(function ($participant) {
+                        $userData = $participant->users;
                         return [
-                            'id' => $participant->users->id,
-                            'username' => $participant->users->username,
-                            'name' => $participant->users->name,
-                            'imageUrl' => $participant->users->imageUrl,
+                            'id' => $userData->id,
+                            'username' => $userData->trashed() ? 'Deleted User' : $userData->username,
+                            'name' => $userData->trashed() ? 'Deleted User' : $userData->name,
+                            'imageUrl' => $userData->imageUrl,
                             'status' => $participant->status,
                             'role' => $participant->role,
+                            'is_deleted' => $userData->trashed(),
                         ];
                     });
                 $unseenCount = $chat->messages()
@@ -203,7 +202,10 @@ class MessageController extends Controller
                     ->count();
                 $latestMessages = $chat
                     ->messages() // Get the messages for this chat
-                    ->with('sender') // Load the sender for each message
+                    // ->with('sender') // Load the sender for each message
+                    ->with(['sender' => function ($query) {
+                        $query->withTrashed(); // Include trashed senders
+                    }])
                     ->orderBy('created_at', 'desc') // Sort messages by newest first
                     ->orderBy('id', 'desc')
                     // ->paginate(23)
@@ -212,33 +214,39 @@ class MessageController extends Controller
                     ->map
                     // ->through
                     (function ($message) use ($loggeduser) {
+                        $sender = $message->sender;
+                        $isSenderDeleted = $sender->trashed();
                         // Transform the message into a custom structure
                         $seenusers =  $message->getSeen()
                             // ->where('user_id', '!=', $loggeduser->id)
-                            ->with(['user'])->get()->map(function ($seen) {
+                            ->with(['user' => function ($query) {
+                                $query->withTrashed(); // Include trashed users in seen list
+                            }])
+                            ->get()
+                            ->map(function ($seen) {
+                                $user = $seen->user;
                                 return [
                                     'id' => $seen->id,
                                     'userData' => [
-                                        'id' => $seen->user->id,
-                                        'imageUrl' => $seen->user->imageUrl,
-                                        'username' => $seen->user->username,
+                                        'id' => $user->id,
+                                        'imageUrl' => $user->trashed() ? null : $user->imageUrl,
+                                        'username' => $user->trashed() ? 'Deleted User' : $user->username,
+                                        'is_deleted' => $user->trashed(),
                                     ],
                                     'updated_at' => $seen->updated_at,
                                 ];
                             });
                         return [
                             'sender' => [
-                                'sender_id' => $message->sender->id, // Get the sender's ID
-                                'username' => $message->sender->username, // Get the sender's username
-                                'imageUrl' => $message->sender->imageUrl, // Get the sender's image URL
+                                'sender_id' => $sender->id,
+                                'username' => $isSenderDeleted ? 'Deleted User' : $sender->username,
+                                'imageUrl' => $isSenderDeleted ? null : $sender->imageUrl,
+                                'is_deleted' => $isSenderDeleted,
                             ],
                             'chat_id' => $message->chat_id,
                             'message' => $message->message,
                             'is_missed_call' => $message->is_missed_call,
                             'media_type' => $message->media_type,
-
-                            // Get the content of the message
-
                             'created_at' => $message->created_at, // Format the time
                             'updated_at' => $message->updated_at, // Format the time
                             'seenusers' => $seenusers,
@@ -264,6 +272,21 @@ class MessageController extends Controller
             return $th;
         }
     }
+    //    {
+    //                 "id": "9f017b5e-9a17-44bf-b9df-419c5399927b"
+    //             },
+    //             {
+    //                 "id": "9f017566-92c8-4c12-9eeb-1b2e049bf45b"
+    //             },
+    //             {
+    //                 "id": "9eb89390-5d63-4e07-a676-3cab533c4f83"
+    //             },
+    //             {
+    //                 "id": "9ec4dc55-0fd5-484d-8c45-44c6bb8353e7"
+    //             },
+    //             {
+    //                 "id": "9ec246b9-bbc9-44d9-ab8b-08f46510c558"
+    //             }
     public function getAllChats()
     {
         try {

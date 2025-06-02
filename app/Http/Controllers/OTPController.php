@@ -29,54 +29,50 @@ class OTPController extends Controller
         if ($validation->fails()) {
             return HelperResponse('error', $validation->errors()->first(), 422, $validation->errors()->messages());
         }
+        try {
+            //OTP functionality
+            $otp = strval(rand(100000, 999999));
+            $otpString = Hash::make($otp);
+            $user = User::where('email', $request->email)->first();
+            if ($user) {
+                if ($user->username != null) {
+                    return HelperResponse("error", "User found. Kindly login!", 422);
+                }
+                $user->otp = $otpString;
+                $user->otp_expires_at = Carbon::now()->addMinutes(15);
+                $user->issue = $request->issue;
+                $user->save();
+                $this->helperService->mailService($otp, $user);
 
-        //OTP functionality
-        $otp = strval(rand(100000, 999999));
-        $otpString = Hash::make($otp);
-        $user = User::where('email', $request->email)->first();
+                $token = $user->createToken('auth_token')->plainTextToken;
+                //JWTAuth::customClaims(['id'=>$user->id,'email'=>$user->email])->fromUser($user);
+
+                // $datetime = Carbon::parse($user->otp_expires_at); // Replace with your datetime
+
+                // // Get time in HH:MM format
+                // $currentTime = $datetime->format('H:i');
+
+                // // Get time with seconds in HH:MM:SS format
+                // $currentTimeWithSeconds = $datetime->format('H:i:s');
 
 
-
-        if ($user) {
-            if ($user->username != null) {
-                return HelperResponse("error", "User found. Kindly login!", 422);
+                return HelperResponse("success", "Your OTP is sent successfully and will be valid till 15 minutes. Kindly check your email.", 200, $token);
             }
-            $user->otp = $otpString;
-            $user->otp_expires_at = Carbon::now()->addMinutes(15);
-            $user->issue = $request->issue;
-            $user->save();
-            $this->helperService->mailService($otp, $user);
-
-            $token = $user->createToken('auth_token')->plainTextToken;
-            //JWTAuth::customClaims(['id'=>$user->id,'email'=>$user->email])->fromUser($user);
-
-            // $datetime = Carbon::parse($user->otp_expires_at); // Replace with your datetime
-
-            // // Get time in HH:MM format
-            // $currentTime = $datetime->format('H:i');
-
-            // // Get time with seconds in HH:MM:SS format
-            // $currentTimeWithSeconds = $datetime->format('H:i:s');
-
-
-            return HelperResponse("success", "Your OTP is sent successfully and will be valid till 15 minutes. Kindly check your email.", 200, $token);
+            $newuser = User::create([
+                'email' => $request->email,
+                'otp' => $otpString,
+                'otp_expires_at' => Carbon::now()->addMinutes(15),
+                'issue' => $request->issue
+            ]);
+            $newuser->save();
+            //Send the OTP via email
+            $this->helperService->mailService($otp, $newuser);
+            $token =  $newuser->createToken('auth_token')->plainTextToken;
+            //JWTAuth::customClaims(['id'=>$newuser->id,'email'=>$newuser->email])->fromUser($newuser);
+            return HelperResponse("success", "Your OTP is sent successfully and will be valid till 15 minutes. Kindly check your email.", 200, $token,);
+        } catch (\Throwable $th) {
+            return HelperResponse("error", $th->getMessage(), 500);
         }
-        $newuser = User::create([
-            'email' => $request->email,
-            'otp' => $otpString,
-            'otp_expires_at' => Carbon::now()->addMinutes(15),
-            'issue' => $request->issue
-        ]);
-        $newuser->save();
-
-
-        //Send the OTP via email
-        $this->helperService->mailService($otp, $newuser);
-
-        $token =  $newuser->createToken('auth_token')->plainTextToken;
-        //JWTAuth::customClaims(['id'=>$newuser->id,'email'=>$newuser->email])->fromUser($newuser);
-
-        return HelperResponse("success", "Your OTP is sent successfully and will be valid till 15 minutes. Kindly check your email.", 200, $token,);
     }
     public function verifyOtp(Request $request)
     {
