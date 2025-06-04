@@ -11,7 +11,7 @@ use App\Models\User;
 use App\Models\VideoViews;
 use App\Services\FirebaseNotificationService;
 use App\Services\HelperService;
-
+use Faker\Extension\Helper;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -405,91 +405,95 @@ class PostController extends Controller
         if ($validation->fails()) {
             return HelperResponse('error', $validation->errors()->first(), 422, $validation->errors()->messages());
         }
-        $user = Auth::user();
-        $post = Post::find($request->post_id);
-        $check = $post->isLiked();
+        try {
+            $user = Auth::user();
+            $post = Post::find($request->post_id);
+            $check = $post->isLiked();
 
-        if ($check) {
+            if ($check) {
 
-            $newlike = $post->unlike();
+                $newlike = $post->unlike();
 
-            $post->loadCount('likes');
-            //if like maker and post maker are same return 
-            if ($newlike->user_id == $post->user_id) {
+                $post->loadCount('likes');
+                //if like maker and post maker are same return 
+                if ($newlike->user_id == $post->user_id) {
+                    return HelperResponse('success', 'Post unliked', 200, [
+                        'like_status' => false,
+                        'likes' => $post->likes_count,
+                    ]);
+                }
+
+                $likes = $post->likes_count;
+                if ($likes == 0 || ($likes == 1 && $post->likes[0]->user_id == $post->user_id)) {
+                    Notifications::where('first_parent_id', $post->id)->where('second_parent_type', get_class($newlike))->delete();
+                }
+
+
                 return HelperResponse('success', 'Post unliked', 200, [
                     'like_status' => false,
                     'likes' => $post->likes_count,
                 ]);
             }
 
-            $likes = $post->likes_count;
-            if ($likes == 0 || ($likes == 1 && $post->likes[0]->user_id == $post->user_id)) {
-                Notifications::where('first_parent_id', $post->id)->where('second_parent_type', get_class($newlike))->delete();
-            }
+            $newlike = $post->like();
+            $post->loadCount('likes');
+            //liker and postmaker not same
+            if ($user->id != $post->user_id) {
+                $postOwner = $post->user;
+                $text = $post->description;
+                $desc = ": " . ($text != null && strlen($text) > 20) ? (substr($text, 0, 20) . '...') : $text;
 
+                if ($postOwner->deviceToken != null) {
+                    $deviceToken = $postOwner->deviceToken;
+                    $parts = $this->helperService->breakDeviceToken($deviceToken);
+                    $loggedUserPart = $this->helperService->breakDeviceToken(Auth::user()->deviceToken);
 
-            return HelperResponse('success', 'Post unliked', 200, [
-                'like_status' => false,
-                'likes' => $post->likes_count,
-            ]);
-        }
+                    if ($parts[1] != Auth::user()->id && $parts[0] != $loggedUserPart[0]) {
+                        $presentPostLike = $post->likes()->where('user_id', '!=', $user->id)->get();
 
-        $newlike = $post->like();
-        $post->loadCount('likes');
-        //liker and postmaker not same
-        if ($user->id != $post->user_id) {
-            $postOwner = $post->user;
-            $text = $post->description;
-            $desc = ": " . ($text != null && strlen($text) > 20) ? (substr($text, 0, 20) . '...') : $text;
+                        $files = $post->singleFile;
+                        $thumbnail = $files[0]['thumbnail'];
+                        $awsLink = $files[0]['aws_link'];
+                        $isVideo = $post->isVideo;
+                        $postPic = $isVideo
+                            ? $thumbnail
+                            : (!empty($thumbnail) ? $thumbnail : $awsLink);
 
-            if ($postOwner->deviceToken != null) {
-                $deviceToken = $postOwner->deviceToken;
-                $parts = $this->helperService->breakDeviceToken($deviceToken);
-                $loggedUserPart = $this->helperService->breakDeviceToken(Auth::user()->deviceToken);
+                        $countP = $presentPostLike->count();
+                        $this->firebaseService->likeCommentNotification(
+                            $parts[0],
+                            'Socializze',
+                            $countP . ' people liked your post' . ($text == null ? "" : $desc),
+                            $this->helperService->fullUrlTransform($postPic),
+                        );
+                    }
+                }
+                $findNotification = Notifications::where('first_parent_id', $post->id)->where('second_parent_type', 'App/Models/Like')->first();
 
-                if ($parts[1] != Auth::user()->id && $parts[0] != $loggedUserPart[0]) {
-                    $presentPostLike = $post->likes()->where('user_id', '!=', $user->id)->get();
+                if ($findNotification == null) {
 
-                    $files = $post->singleFile;
-                    $thumbnail = $files[0]['thumbnail'];
-                    $awsLink = $files[0]['aws_link'];
-                    $isVideo = $post->isVideo;
-                    $postPic = $isVideo
-                        ? $thumbnail
-                        : (!empty($thumbnail) ? $thumbnail : $awsLink);
+                    Notifications::create([
+                        'user_id' => $post->user_id,
+                        'first_parent_id' => $post->id,
+                        'first_parent_type' => get_class($post),
+                        'second_parent_id' => $newlike->id,
+                        'second_parent_type' => get_class($newlike),
+                        'seen' => false,
+                    ]);
+                } else {
 
-                    $countP = $presentPostLike->count();
-                    $this->firebaseService->likeCommentNotification(
-                        $parts[0],
-                        'Socializze',
-                        $countP . ' people liked your post' . ($text == null ? "" : $desc),
-                        $this->helperService->fullUrlTransform($postPic),
-                    );
+                    $findNotification->second_parent_id = $newlike->id;
+                    $findNotification->seen = false;
+                    $findNotification->save();
                 }
             }
-            $findNotification = Notifications::where('first_parent_id', $post->id)->where('second_parent_type', 'App/Models/Like')->first();
-
-            if ($findNotification == null) {
-
-                Notifications::create([
-                    'user_id' => $post->user_id,
-                    'first_parent_id' => $post->id,
-                    'first_parent_type' => get_class($post),
-                    'second_parent_id' => $newlike->id,
-                    'second_parent_type' => get_class($newlike),
-                    'seen' => false,
-                ]);
-            } else {
-
-                $findNotification->second_parent_id = $newlike->id;
-                $findNotification->seen = false;
-                $findNotification->save();
-            }
+            return HelperResponse('success', 'Post liked', 200, [
+                'like_status' => true,
+                'likes' => $post->likes_count,
+            ]);
+        } catch (\Throwable $th) {
+            return HelperResponse('error', $th->getMessage(), 422, $th);
         }
-        return HelperResponse('success', 'Post liked', 200, [
-            'like_status' => true,
-            'likes' => $post->likes_count,
-        ]);
     }
     public function getPostsAdvance(Request $request)
     {
