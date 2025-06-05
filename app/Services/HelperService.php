@@ -125,29 +125,33 @@ class HelperService
     }
     public function uploadFilesAnThumbnail($files, $thumbnails, $directory)
     {
-        $len = count($files);
-        $j = 0;
-        $uploadedFiles = [];
-        $videoExtensions = ['mp4', 'mov', 'avi', 'mkv', 'flv', 'wmv', 'webm', '3gp', 'm4v', 'ts', 'f4v'];
+        try {
+            $len = count($files);
+            $j = 0;
+            $uploadedFiles = [];
+            $videoExtensions = ['mp4', 'mov', 'avi', 'mkv', 'flv', 'wmv', 'webm', '3gp', 'm4v', 'ts', 'f4v'];
 
-        // $imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'];
-        for ($i = 0; $i < $len; $i++) {
-            $extension = strtolower($files[$i]->getClientOriginalExtension());
-            $awsLink = $this->uploadOnlyFile($files[$i], $directory);
+            // $imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'];
+            for ($i = 0; $i < $len; $i++) {
+                $extension = strtolower($files[$i]->getClientOriginalExtension());
+                $awsLink = $this->uploadOnlyFile($files[$i], $directory);
 
-            if (in_array($extension, $videoExtensions)) {
-                $thumbnailLink = $this->uploadOnlyThumbnail($thumbnails[$j], $directory);
-                $j++;
-            } else {
-                $thumbnailLink = '';
+                if (in_array($extension, $videoExtensions)) {
+                    $thumbnailLink = $this->uploadOnlyThumbnail($thumbnails[$j], $directory);
+                    $j++;
+                } else {
+                    $thumbnailLink = '';
+                }
+
+                $uploadedFiles[] = [
+                    'aws_link' => $awsLink,
+                    'thumbnail' => $thumbnailLink,
+                ];
             }
-
-            $uploadedFiles[] = [
-                'aws_link' => $awsLink,
-                'thumbnail' => $thumbnailLink,
-            ];
+            return $uploadedFiles;
+        } catch (\Throwable $th) {
+            return $th->getMessage();
         }
-        return $uploadedFiles;
     }
     public function awsDelete($UploadedFilesArray)
     {

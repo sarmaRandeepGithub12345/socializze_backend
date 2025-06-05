@@ -121,26 +121,26 @@ class PostController extends Controller
     }
     public function makeAPost(Request $request)
     {
-
-        $validation = Validator::make($request->all(), [
-            'description' => 'string|min:0|max:1000',
-            'files' => 'required|array',
-            'files.*' => 'file|max:20480',
-            'thumbnails' => 'array',
-            'thumbnails.*' => 'file|max:20480',
-            'shorts' => 'required|integer',
-        ]);
-        // 'files' => 'required|array',
-        // 'files.*' => 'file|max:512000', // Max 500MB per file (in kilobytes)
-
-        // 'thumbnails' => 'required|array',
-        // 'thumbnails.*' => 'file|max:10240', // Max 10MB per thumbnail (example)
-
-
-        if ($validation->fails()) {
-            return HelperResponse('error', $validation->errors()->first(), 422, $validation->errors()->messages());
-        }
         try {
+            $validation = Validator::make($request->all(), [
+                'description' => 'string|min:0|max:1000',
+                'files' => 'required|array',
+                'files.*' => 'file|max:20480',
+                'thumbnails' => 'array',
+                'thumbnails.*' => 'file|max:20480',
+                'shorts' => 'required|integer',
+            ]);
+            // 'files' => 'required|array',
+            // 'files.*' => 'file|max:512000', // Max 500MB per file (in kilobytes)
+
+            // 'thumbnails' => 'required|array',
+            // 'thumbnails.*' => 'file|max:10240', // Max 10MB per thumbnail (example)
+
+
+            if ($validation->fails()) {
+                return HelperResponse('error', $validation->errors()->first(), 422, $validation->errors()->messages());
+            }
+
             $filesToUpload = $request->file('files');
             $thumbNails = $request->file('thumbnails');
 
