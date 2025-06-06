@@ -142,6 +142,7 @@ class NotificationController extends Controller
                                 'id' => $notif->firstParent->follower_id, //$follower,
                                 'username' => $follower->username, //$follower->username,
                                 'profile_picture' => $follower->imageUrl, //$follower->imageUrl,
+                                'name' => $follower->name,
                                 'isFollowed' => $isFollowed,
                             ],
                         ],
