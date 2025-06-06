@@ -29,7 +29,7 @@ class StoryController extends Controller
 
         $validation = Validator::make($request->all(), [
             'files' => 'required|array',
-            'files.*' => 'file|max:20480', //20MB
+            'files.*' => 'file|max:204800', //20MB
             // 'thumbnails' => 'required|array',
             'thumbnails' => 'array',
 

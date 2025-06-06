@@ -125,7 +125,7 @@ class PostController extends Controller
             $validation = Validator::make($request->all(), [
                 'description' => 'string|min:0|max:1000',
                 'files' => 'required|array',
-                'files.*' => 'file|max:20480',
+                'files.*' => 'file|max:204800',
                 'thumbnails' => 'array',
                 'thumbnails.*' => 'file|max:20480',
                 'shorts' => 'required|integer',
