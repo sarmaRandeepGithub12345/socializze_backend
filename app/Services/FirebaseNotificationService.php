@@ -70,13 +70,13 @@ class FirebaseNotificationService
 
         $this->messaging->send($message);
     }
-    public function followUserNotification($token, $title, $body, $image)
+    public function followUserNotification($token, $username, $body, $image, $userId, $name, $isFollowed)
     {
 
         $message = [
             'token' => $token,
             'notification' => [
-                'title' => $title,
+                'title' => $username,
                 'body' => $body,
 
                 // 'post_image'=>'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQb-NGEQDekk2BwsllLjk4tcIM_BPIzXECdsg&s',
@@ -84,6 +84,26 @@ class FirebaseNotificationService
             'data' => [
                 'type' => 'followed_me',
                 'post_image' => $image,
+                'user_id' => $userId,
+                'username' => $username,
+                'name' => $name,
+                'isFollowed' => $isFollowed,
+            ],
+        ];
+
+        $this->messaging->send($message);
+    }
+    public function unfollowUserNotification($token, $userId)
+    {
+
+        $message = [
+            'token' => $token,
+            'notification' => [
+                // 'post_image'=>'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQb-NGEQDekk2BwsllLjk4tcIM_BPIzXECdsg&s',
+            ],
+            'data' => [
+                'type' => 'unfollowed_me',
+                'user_id' => $userId
             ],
         ];
 

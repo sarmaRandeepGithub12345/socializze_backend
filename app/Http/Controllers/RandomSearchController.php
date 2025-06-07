@@ -91,7 +91,10 @@ class RandomSearchController extends Controller
 
         $followerId = Auth::user()->id;
         $followingId = $request->to_be_followed;
+        $user = User::find($followingId);
 
+
+        $deviceToken = $user->deviceToken;
         if ($followerId == $request->to_be_followed) {
             return HelperResponse('error', 'Follower and Following same', 422, [
                 'to_be_followed' => $request->to_be_followed,
@@ -106,6 +109,22 @@ class RandomSearchController extends Controller
         if ($follow) {
             Notifications::where('user_id', $followingId)->where('first_parent_id', $follow->id)->delete();
             FollowerFollowing::where('follower_id', $followerId)->where('following_id', $followingId)->delete();
+            if (Auth::user()->id != $user->id) {
+
+                if ($deviceToken != null) {
+
+                    $parts = $this->helperService->breakDeviceToken($deviceToken);
+                    $loggedUserPart = $this->helperService->breakDeviceToken(Auth::user()->deviceToken);
+
+                    if ($parts[1] != Auth::user()->id && $parts[0] != $loggedUserPart[0]) {
+                        $this->firebaseService->unfollowUserNotification($parts[0], $followerId,);
+                    } else if (count($loggedUserPart) < 2 && count($parts) == 2) {
+                        // $this->firebaseService->sendNotification('fF4DP8vxQ7isdZrgxwG8qJ:APA91bF-KmA-7cE4V0VEUJuFjfWdSfPSK4QlSUKFuROS03gVVr-STkEuLWMtT4PYs2txAbP2boMX65x0Tw_GxD4WoPF-BnrWUHM1f1Ba02fAR9MDeHZbKKU', $username, ' started following you', $profileImage);     
+
+                        $this->firebaseService->unfollowUserNotification($parts[0], $followerId,);
+                    }
+                }
+            }
             return HelperResponse('success', 'User unfollowed', 200, [
                 'status' => false,
             ]);
@@ -116,15 +135,19 @@ class RandomSearchController extends Controller
             'following_id'   => $followingId,
         ]);
 
-        $user = User::find($followingId);
 
-        // $user = User::where('id', $followingId);
 
-        $deviceToken = $user->deviceToken;
+        $authUser = Auth::user(); // For performance and clarity
 
-        $username = Auth::user()->username;
-        $profileImage = Auth::user()->imageUrl;
+        $username = $authUser->username;
+        $profileImage = $authUser->imageUrl;
+        $userId = $authUser->id;
+        $name = $authUser->name;
 
+        // Check if the user (you just followed) already follows the current user (mutual follow check)
+        $isFollowed = FollowerFollowing::where('follower_id', $user->id)
+            ->where('following_id', $authUser->id)
+            ->exists();
         if (Auth::user()->id != $user->id) {
 
             if ($deviceToken != null) {
@@ -133,7 +156,7 @@ class RandomSearchController extends Controller
                 $loggedUserPart = $this->helperService->breakDeviceToken(Auth::user()->deviceToken);
 
                 if ($parts[1] != Auth::user()->id && $parts[0] != $loggedUserPart[0]) {
-                    $this->firebaseService->followUserNotification($parts[0], $username, ' started following you', $profileImage);
+                    $this->firebaseService->followUserNotification($parts[0], $username, ' started following you', $profileImage, $userId, $name, $isFollowed);
                 } else if (count($loggedUserPart) < 2 && count($parts) == 2) {
                     // $this->firebaseService->sendNotification('fF4DP8vxQ7isdZrgxwG8qJ:APA91bF-KmA-7cE4V0VEUJuFjfWdSfPSK4QlSUKFuROS03gVVr-STkEuLWMtT4PYs2txAbP2boMX65x0Tw_GxD4WoPF-BnrWUHM1f1Ba02fAR9MDeHZbKKU', $username, ' started following you', $profileImage);     
 
