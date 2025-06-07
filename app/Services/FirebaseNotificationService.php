@@ -70,6 +70,25 @@ class FirebaseNotificationService
 
         $this->messaging->send($message);
     }
+    public function followUserNotification($token, $title, $body, $image)
+    {
+
+        $message = [
+            'token' => $token,
+            'notification' => [
+                'title' => $title,
+                'body' => $body,
+
+                // 'post_image'=>'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQb-NGEQDekk2BwsllLjk4tcIM_BPIzXECdsg&s',
+            ],
+            'data' => [
+                'type' => 'followed_me',
+                'post_image' => $image,
+            ],
+        ];
+
+        $this->messaging->send($message);
+    }
 
     public function madeCommentNotification($token, $title, $body, $postimage, $profileimage)
     {

@@ -597,4 +597,8 @@ class AuthController extends Controller
             'token' => $token,
         ]);
     }
+    public function checkWhichUserIsLogged()
+    {
+        return Auth::user();
+    }
 }

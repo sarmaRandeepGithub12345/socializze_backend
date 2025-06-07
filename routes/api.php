@@ -41,6 +41,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::prefix('auth')
         ->controller(AuthController::class)
         ->group(function () {
+            Route::post('check-logged-user', 'checkWhichUserIsLogged');
             Route::post('delete-profile', 'deleteProfile');
             Route::post('change-profile-picture', 'changeProfilePicture');
             Route::post('create-username', 'usernameGetToken');
