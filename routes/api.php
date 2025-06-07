@@ -73,6 +73,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
             Route::post('delete-post', 'deletePost');
             Route::post('test', 'test');
             Route::post('like-a-post', 'likeAPost');
+            Route::post('get-likes', 'getLikes');
         });
     Route::prefix('reel')
         ->controller(ReelsController::class)

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Events\NewPostPing;
 use Illuminate\Http\Request;
 use App\Models\FollowerFollowing;
+use App\Models\Like;
 use App\Models\Notifications;
 use App\Models\Post;
 use App\Models\User;
@@ -117,6 +118,40 @@ class PostController extends Controller
             return response()->json([
                 'error' => $th->getMessage()
             ], 500);
+        }
+    }
+    public function getLikes(Request $request)
+    {
+        $validation = Validator::make($request->all(), [
+            'post_id' => 'required|uuid|exists:posts,id',
+        ]);
+        // 'files' => 'required|array',
+        // 'files.*' => 'file|max:512000', // Max 500MB per file (in kilobytes)
+
+        // 'thumbnails' => 'required|array',
+        // 'thumbnails.*' => 'file|max:10240', // Max 10MB per thumbnail (example)
+
+
+        if ($validation->fails()) {
+            return HelperResponse('error', $validation->errors()->first(), 422, $validation->errors()->messages());
+        }
+
+        try {
+            $likes = Like::where('likeable_id', $request->post_id)->paginate(10);
+            $likes->getCollection()->transform(function ($like) {
+
+                return [
+                    'id' => $like->users->id,
+                    'username' => $like->users->username,
+                    'imageUrl' => $like->users->imageUrl,
+                    'name' => $like->users->name,
+                ];
+            });
+            return HelperResponse("success", "likes", 200, [
+                'likes' => $likes,
+            ]);
+        } catch (\Throwable $th) {
+            return HelperResponse("error", $th->getMessage(), 422,);
         }
     }
     public function makeAPost(Request $request)
