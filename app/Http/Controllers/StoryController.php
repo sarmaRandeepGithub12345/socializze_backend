@@ -33,7 +33,7 @@ class StoryController extends Controller
             // 'thumbnails' => 'required|array',
             'thumbnails' => 'array',
 
-            'thumbnails.*' => 'file|max:20480',
+            'thumbnails.*' => 'file|max:204800',
             'shorts' => 'required|integer',
         ]);
         if ($validation->fails()) {

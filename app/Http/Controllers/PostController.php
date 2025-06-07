@@ -127,7 +127,7 @@ class PostController extends Controller
                 'files' => 'required|array',
                 'files.*' => 'file|max:204800',
                 'thumbnails' => 'array',
-                'thumbnails.*' => 'file|max:20480',
+                'thumbnails.*' => 'file|max:204800',
                 'shorts' => 'required|integer',
             ]);
             // 'files' => 'required|array',
